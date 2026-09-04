@@ -66,6 +66,7 @@ class CheckpointView:
         self._tracking_switch = ft.Switch(label="Automatic stop detection", on_change=self._toggle_tracking)
         self._status = ft.Text("Automatic detection is paused.")
         self._note = ft.TextField(label="Optional note for the checkpoint")
+        self._keep_note = ft.Checkbox(label="Keep note after saving", value=False)
 
         self._search_field = ft.TextField(
             label="Search notes",
@@ -175,6 +176,8 @@ class CheckpointView:
         self._stop_seconds = self.STOP_DURATION_OPTIONS[selected_stop_duration]
         self._update_stop_duration_display()
 
+        await self._update_permission_status()
+
         await self._refresh_history()
 
     def control(self) -> ft.Control:
@@ -196,7 +199,14 @@ class CheckpointView:
                 self._tracking_switch,
                 self._status,
                 self._stop_duration_display,
-                self._note,
+                ft.Row(
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
+                        self._note,
+                        self._keep_note,
+                    ],
+                ),
                 ft.Button(content="Record current stop", icon=ft.Icons.LOCATION_ON, on_click=self._record_manual),
                 ft.Text(
                     "Location history stays on this device. Background tracking depends on\n"
@@ -211,7 +221,6 @@ class CheckpointView:
             expand=True,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                # --- Export section ---
                 ft.Text("Export", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
                 ft.Row(
                     alignment=ft.MainAxisAlignment.CENTER,
@@ -221,7 +230,6 @@ class CheckpointView:
                 ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._export_progress]),
                 ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._export_status]),
                 ft.Divider(),
-                # --- Filters section ---
                 ft.Text("Filters", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
                 ft.Row(
                     alignment=ft.MainAxisAlignment.CENTER,
@@ -237,7 +245,6 @@ class CheckpointView:
                         ft.TextButton(content="Clear filters", icon=ft.Icons.CLEAR, on_click=self._clear_filters),
                     ],
                 ),
-                # Map hint with the actual icon symbol
                 ft.Row(
                     alignment=ft.MainAxisAlignment.CENTER,
                     controls=[
@@ -316,6 +323,35 @@ class CheckpointView:
                 f"Stop detection duration: {self._stop_seconds // 60} minutes (adjust in Settings)"
             )
 
+    async def _update_permission_status(self) -> None:
+        """Check current location permission and update UI with platform-specific messages."""
+        # Use platform name to avoid attribute errors
+        platform_name = self._page.platform.name
+
+        # For web and iOS, background tracking is not supported.
+        if platform_name in ("WEB", "IOS", "BROWSER"):
+            self._status.value = (
+                "Automatic detection works best while the app is in focus. "
+                "Background tracking is limited on this platform."
+            )
+            self._page.update()
+            return
+
+        # For Android and other platforms (desktop), check permission.
+        try:
+            status = await self._geolocator.get_permission_status()
+        except (AttributeError, NotImplementedError):
+            status = None
+
+        if status in (ftg.GeolocatorPermissionStatus.ALWAYS, ftg.GeolocatorPermissionStatus.WHILE_IN_USE):
+            if status == ftg.GeolocatorPermissionStatus.ALWAYS:
+                self._status.value = "Automatic detection is paused. Tap the switch to start (works in background)."
+            else:
+                self._status.value = "Automatic detection is paused. Tap the switch to start (best when app is focused)."
+        else:
+            self._status.value = "Automatic detection is paused. Tap the switch to grant location permission (background tracking requires 'Always allow')."
+        self._page.update()
+
     async def _toggle_tracking(self, _event) -> None:
         if self._tracking_switch.value:
             permission = await self._geolocator.request_permission()
@@ -323,11 +359,20 @@ class CheckpointView:
                 ftg.GeolocatorPermissionStatus.ALWAYS,
                 ftg.GeolocatorPermissionStatus.WHILE_IN_USE,
             ):
-                self._tracking_switch.value = False
-                self._status.value = "Location permission is needed to detect stops."
+                self._tracker_enabled = False
+                self._status.value = "Location permission denied. Automatic detection is paused. Grant permission in system settings."
+                self._page.update()
+                return
+
+            self._tracker_enabled = True
+            if permission == ftg.GeolocatorPermissionStatus.ALWAYS:
+                self._status.value = "Detecting long pauses while location updates are available (background allowed)."
             else:
-                self._tracker_enabled = True
-                self._status.value = "Detecting long pauses while location updates are available."
+                self._status.value = "Detecting long pauses while location updates are available (best when app is focused)."
+
+            platform_name = self._page.platform.name
+            if platform_name in ("WEB", "IOS", "BROWSER"):
+                self._status.value += " (Works only while the app is in focus.)"
         else:
             self._tracker_enabled = False
             self._still_since = None
@@ -365,7 +410,8 @@ class CheckpointView:
             source,
             self._note.value,
         )
-        self._note.value = ""
+        if not self._keep_note.value:
+            self._note.value = ""
         self._status.value = f"{source} checkpoint saved at {checkpoint.coordinate_text}."
         await self._refresh_history()
         self._page.update()
@@ -435,8 +481,6 @@ class CheckpointView:
         delay_task = asyncio.ensure_future(asyncio.sleep(self.HISTORY_LOADING_DELAY_SECONDS))
         done, _pending = await asyncio.wait({fetch_task, delay_task}, return_when=asyncio.FIRST_COMPLETED)
         if fetch_task not in done:
-            # Fetch is taking a while (a large history) — only now show the indicator,
-            # so quick loads never flash it.
             self._history_progress.visible = True
             self._history_loading_text.visible = True
             self._page.update()
@@ -502,8 +546,6 @@ class CheckpointView:
         self._export_status.value = message
         self._page.update()
         if busy:
-            # Yield to the event loop so the progress bar actually paints before the
-            # (possibly slow, for large histories) work below runs.
             await asyncio.sleep(0)
 
     async def _run_export(self, kind: str, export_all: bool, _event) -> None:
