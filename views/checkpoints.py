@@ -209,7 +209,10 @@ class CheckpointView:
     def _history_panel(self) -> ft.Control:
         return ft.Column(
             expand=True,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
+                # --- Export section ---
+                ft.Text("Export", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
                 ft.Row(
                     alignment=ft.MainAxisAlignment.CENTER,
                     controls=[self._export_json_button, self._export_markdown_button],
@@ -217,15 +220,8 @@ class CheckpointView:
                 ),
                 ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._export_progress]),
                 ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._export_status]),
-                ft.Row(
-                    alignment=ft.MainAxisAlignment.CENTER,
-                    controls=[
-                        ft.Text(
-                            "Tap the icon on a checkpoint to open it in OpenStreetMap.",
-                            text_align=ft.TextAlign.CENTER,
-                        )
-                    ],
-                ),
+                ft.Divider(),
+                # --- Filters section ---
                 ft.Text("Filters", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
                 ft.Row(
                     alignment=ft.MainAxisAlignment.CENTER,
@@ -239,6 +235,16 @@ class CheckpointView:
                             on_click=lambda _event: self._page.show_dialog(self._date_range_picker),
                         ),
                         ft.TextButton(content="Clear filters", icon=ft.Icons.CLEAR, on_click=self._clear_filters),
+                    ],
+                ),
+                # Map hint with the actual icon symbol
+                ft.Row(
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    controls=[
+                        ft.Text(
+                            "Tap the ↗ icon on a checkpoint to open it in OpenStreetMap.",
+                            text_align=ft.TextAlign.CENTER,
+                        )
                     ],
                 ),
                 self._filter_summary,
