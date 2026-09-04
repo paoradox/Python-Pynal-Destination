@@ -82,7 +82,10 @@ class CheckpointView:
 
         # ---- Status widget (icon + text) ----
         self._status_icon = ft.Icon(ft.Icons.INFO, size=20)
-        self._status_text = ft.Text("Automatic detection is paused.", text_align=ft.TextAlign.CENTER)
+        self._status_text = ft.Text(
+            "Automatic detection is paused.",
+            text_align=ft.TextAlign.CENTER,
+        )
         self._status_row = ft.Row(
             alignment=ft.MainAxisAlignment.CENTER,
             controls=[self._status_icon, self._status_text],
@@ -91,7 +94,8 @@ class CheckpointView:
 
         # ---- Stop duration display (updated later) ----
         self._stop_duration_display = ft.Text(
-            f"Stop detection duration: {self._stop_seconds // 60} minutes (adjust in Settings)"
+            f"Stop detection duration: {self._stop_seconds // 60} minutes\n(adjust in Settings)",
+            text_align=ft.TextAlign.CENTER,
         )
         # -------------------------------------------------
 
@@ -104,7 +108,11 @@ class CheckpointView:
             on_change=self._on_search_change,
             width=220,
         )
-        self._filter_summary = ft.Text("Showing all checkpoints.")
+        self._filter_summary = ft.Text(
+            "Showing all checkpoints.",
+            text_align=ft.TextAlign.CENTER,
+            weight=ft.FontWeight.BOLD,
+        )
         self._history_progress = ft.ProgressBar(width=280, visible=False)
         self._history_loading_text = ft.Text("Loading checkpoints…", visible=False)
         self._history = ft.ListView(expand=True)
@@ -238,7 +246,8 @@ class CheckpointView:
         # ----- Header (top banner, bold & centered, full width) -----
         header = ft.Container(
             content=ft.Text(
-                "Save a stop now, or allow the app to save a checkpoint after you've been still for a while.",
+                "Save a stop now, or allow the app to save a checkpoint after you've"
+                " been still for a while.",
                 text_align=ft.TextAlign.CENTER,
                 weight=ft.FontWeight.BOLD,
             ),
@@ -252,7 +261,9 @@ class CheckpointView:
         # ----- Footer (bottom banner, bold & centered, full width) -----
         footer = ft.Container(
             content=ft.Text(
-                "Location history stays on this device. Background tracking depends on the location permission you grant and your phone's battery settings.",
+                "Location history stays on this device.\n"
+                "Background tracking depends on the location permission you grant and your\n"
+                " phone's battery settings.",
                 text_align=ft.TextAlign.CENTER,
                 weight=ft.FontWeight.BOLD,
             ),
@@ -361,6 +372,13 @@ class CheckpointView:
             ),
         )
 
+        # Hint text – split into two lines
+        hint_text = ft.Text(
+            "Tap the ↗ icon on a checkpoint\n"
+            "to open it in OpenStreetMap.",
+            text_align=ft.TextAlign.CENTER,
+        )
+
         return ft.Container(
             content=ft.Column(
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -391,15 +409,7 @@ class CheckpointView:
                             clear_filters_button,
                         ],
                     ),
-                    ft.Row(
-                        alignment=ft.MainAxisAlignment.CENTER,
-                        controls=[
-                            ft.Text(
-                                "Tap the ↗ icon on a checkpoint to open it in OpenStreetMap.",
-                                text_align=ft.TextAlign.CENTER,
-                            )
-                        ],
-                    ),
+                    hint_text,
                     self._filter_summary,
                     ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._history_progress]),
                     ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._history_loading_text]),
@@ -432,7 +442,7 @@ class CheckpointView:
                 controls=[
                     ft.Text("Appearance", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
                     ft.Text(
-                        "Choose light mode, dark mode, or follow your device setting.",
+                        "Choose light mode, dark mode,\nor follow your device setting.",
                         text_align=ft.TextAlign.CENTER,
                     ),
                     ft.Row(
@@ -442,7 +452,9 @@ class CheckpointView:
                     ft.Divider(),
                     ft.Text("Stop detection", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
                     ft.Text(
-                        "How long you must stay still before a checkpoint saves automatically. Shorter catches quick stops but may trigger at traffic lights; longer only catches longer stops.",
+                        "How long you must stay still before a\n"
+                        "checkpoint saves automatically. Shorter\ncatches quick stops but may trigger\nat traffic lights;"
+                        " longer only catches\nlonger stops.",
                         text_align=ft.TextAlign.CENTER,
                     ),
                     ft.Row(
@@ -452,7 +464,7 @@ class CheckpointView:
                     ft.Divider(),
                     ft.Text("Danger zone", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
                     ft.Text(
-                        "Permanently delete every checkpoint saved on this device.",
+                        "Permanently delete every checkpoint\nsaved on this device.",
                         text_align=ft.TextAlign.CENTER,
                     ),
                     clear_button,
@@ -479,7 +491,7 @@ class CheckpointView:
 
     def _update_stop_duration_display(self) -> None:
         self._stop_duration_display.value = (
-            f"Stop detection duration: {self._stop_seconds // 60} minutes (adjust in Settings)"
+            f"Stop detection duration: {self._stop_seconds // 60} minutes\n(adjust in Settings)"
         )
 
     # ---------- Helper to update status with an appropriate icon ----------
@@ -514,7 +526,8 @@ class CheckpointView:
 
         if platform_name in ("WEB", "IOS", "BROWSER"):
             self._set_status(
-                "Automatic detection works best while the app is in focus. Background tracking is limited on this platform."
+                "Automatic detection works best while the app is in focus.\n"
+                "Background tracking is limited on this platform."
             )
             return
 
@@ -525,11 +538,21 @@ class CheckpointView:
 
         if status in (ftg.GeolocatorPermissionStatus.ALWAYS, ftg.GeolocatorPermissionStatus.WHILE_IN_USE):
             if status == ftg.GeolocatorPermissionStatus.ALWAYS:
-                self._set_status("Automatic detection is paused. Tap the switch to start (works in background).")
+                self._set_status(
+                    "Automatic detection is paused.\n"
+                    "Tap the switch to start (works in background)."
+                )
             else:
-                self._set_status("Automatic detection is paused. Tap the switch to start (best when app is focused).")
+                self._set_status(
+                    "Automatic detection is paused.\n"
+                    "Tap the switch to start (best when app is focused)."
+                )
         else:
-            self._set_status("Automatic detection is paused. Tap the switch to grant location permission (background tracking requires 'Always allow').")
+            self._set_status(
+                "Automatic detection is paused.\n"
+                "Tap the switch to grant location permission\n"
+                "(background tracking requires 'Always allow')."
+            )
 
     async def _toggle_tracking(self, _event) -> None:
         if self._tracking_switch.value:
@@ -539,18 +562,31 @@ class CheckpointView:
                 ftg.GeolocatorPermissionStatus.WHILE_IN_USE,
             ):
                 self._tracker_enabled = False
-                self._set_status("Location permission denied. Automatic detection is paused. Grant permission in system settings.")
+                self._set_status(
+                    "Location permission denied.\n"
+                    "Automatic detection is paused.\n"
+                    "Grant permission in system settings."
+                )
                 return
 
             self._tracker_enabled = True
             if permission == ftg.GeolocatorPermissionStatus.ALWAYS:
-                self._set_status("Detecting long pauses while location updates are available (background allowed).")
+                self._set_status(
+                    "Detecting long pauses while location updates are available.\n"
+                    "(Background allowed)."
+                )
             else:
-                self._set_status("Detecting long pauses while location updates are available (best when app is focused).")
+                self._set_status(
+                    "Detecting long pauses while location updates are available.\n"
+                    "(Best when app is focused)."
+                )
 
             platform_name = self._page.platform.name
             if platform_name in ("WEB", "IOS", "BROWSER"):
-                self._set_status(self._status_text.value + " (Works only while the app is in focus.)")
+                self._set_status(
+                    self._status_text.value + "\n"
+                    "(Works only while the app is in focus.)"
+                )
         else:
             self._tracker_enabled = False
             self._still_since = None
@@ -562,7 +598,10 @@ class CheckpointView:
             position = await self._geolocator.get_current_position()
             await self._save_position(position, "Manual")
         except Exception as e:
-            self._set_status(f"Could not get location: {e}. Please check your GPS/signal and try again.")
+            self._set_status(
+                f"Could not get location: {e}.\n"
+                "Please check your GPS/signal and try again."
+            )
 
     async def _on_position_change(self, event: ftg.GeolocatorPositionChangeEvent) -> None:
         self._last_position = event.position
@@ -598,7 +637,10 @@ class CheckpointView:
         return self._last_auto_checkpoint_at is None or (now - self._last_auto_checkpoint_at).total_seconds() >= self._stop_seconds
 
     def _on_location_error(self, _event) -> None:
-        self._set_status("Location updates are unavailable. Check Location Services and permissions.")
+        self._set_status(
+            "Location updates are unavailable.\n"
+            "Check Location Services and permissions."
+        )
 
     # --- History filtering -------------------------------------------------
 
