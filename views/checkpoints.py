@@ -47,14 +47,29 @@ class CheckpointView:
         self._filter_search: str = ""
         self._displayed_checkpoints: list[Checkpoint] = []
 
-        self._geolocator = ftg.Geolocator(
-            configuration=ftg.GeolocatorConfiguration(
+        # ---- Geolocator with conditional Android foreground service ----
+        geolocator_kwargs = {
+            "configuration": ftg.GeolocatorConfiguration(
                 accuracy=ftg.GeolocatorPositionAccuracy.HIGH,
                 distance_filter=25,
             ),
-            on_position_change=self._on_position_change,
-            on_error=self._on_location_error,
-        )
+            "on_position_change": self._on_position_change,
+            "on_error": self._on_location_error,
+        }
+
+        # Only add android_configuration if the class exists (safe for web)
+        if hasattr(ftg, "GeolocatorAndroidSettings"):
+            geolocator_kwargs["android_configuration"] = ftg.GeolocatorAndroidSettings(
+                foreground_notification_title="Pynal Destination",
+                foreground_notification_text="Tracking your location for stop detection...",
+                foreground_notification_set_ongoing=True,
+                foreground_notification_enable_wake_lock=True,
+                foreground_notification_enable_wifi_lock=True,
+            )
+
+        self._geolocator = ftg.Geolocator(**geolocator_kwargs)
+        # ----------------------------------------------------------------
+
         self._file_picker = ft.FilePicker()
         self._url_launcher = ft.UrlLauncher()
         self._date_range_picker = ft.DateRangePicker(
@@ -327,7 +342,7 @@ class CheckpointView:
             on_click=self._clear_filters,
             style=ft.ButtonStyle(
                 color=ft.Colors.ERROR,
-                bgcolor=None,  # transparent background
+                bgcolor=None,
                 shape=ft.RoundedRectangleBorder(radius=8),
                 padding=10,
             ),
@@ -675,7 +690,6 @@ class CheckpointView:
             leading=ft.Icon(icon),
             title=f"{checkpoint.source} · {checkpoint.coordinate_text}",
             subtitle=f"{checkpoint.created_at}{note}",
-            # OpenStreetMap button – now green
             trailing=ft.IconButton(
                 icon=ft.Icons.OPEN_IN_NEW,
                 icon_color=ft.Colors.GREEN,

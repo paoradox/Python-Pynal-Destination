@@ -23,3 +23,17 @@ product = "Pynal Destination"
 org = "dev.flet"
 company = "J.P Ancheta Javier"
 copyright = "Copyright (C) 2026 by J.P Ancheta Javier"
+
+# Android permissions required for background location tracking
+[tool.flet.android.permission]
+"android.permission.ACCESS_FINE_LOCATION" = true
+"android.permission.ACCESS_COARSE_LOCATION" = true
+"android.permission.ACCESS_BACKGROUND_LOCATION" = true
+"android.permission.FOREGROUND_SERVICE" = true
+"android.permission.FOREGROUND_SERVICE_LOCATION" = true
+"android.permission.WAKE_LOCK" = true
+
+# (Optional) Build system – Flet uses setuptools by default
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
