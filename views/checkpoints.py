@@ -65,6 +65,7 @@ class CheckpointView:
 
         self._tracking_switch = ft.Switch(label="Automatic stop detection", on_change=self._toggle_tracking)
         self._status = ft.Text("Automatic detection is paused.")
+        self._note = ft.TextField(label="Optional note for the checkpoint")
 
         self._search_field = ft.TextField(
             label="Search notes",
