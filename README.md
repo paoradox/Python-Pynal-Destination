@@ -16,7 +16,6 @@
 | **Export** | Export checkpoints as JSON or Markdown — full history or currently filtered set |
 | **Backup & Clear** | Back up all checkpoints to a `.zip` (JSON + Markdown) before clearing history, or clear without a backup |
 | **Settings** | Appearance (theme) and configurable auto‑detection stop duration |
-| **Cross‑Platform** | Supports desktop and mobile (Android/iOS), using platform‑appropriate storage for the database |
 
 ---
 
@@ -133,6 +132,7 @@ This project is for **educational purposes** and is not intended for commercial 
 - Built with [**Flet**](https://flet.dev/) and **Python**
 - Location services powered by **flet‑geolocator**
 - Maps integration via **OpenStreetMap**
+- Development and debugging using **Claude AI and DeepSeek AI**
 
 ---
 
