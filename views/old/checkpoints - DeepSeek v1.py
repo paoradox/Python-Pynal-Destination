@@ -94,29 +94,8 @@ class CheckpointView:
         self._history_loading_text = ft.Text("Loading checkpoints…", visible=False)
         self._history = ft.ListView(expand=True)
 
-        # ---- Export buttons (themed) ----
-        self._export_json_button = ft.Button(
-            content="Export JSON",
-            icon=ft.Icons.FILE_DOWNLOAD,
-            on_click=self._export_json,
-            style=ft.ButtonStyle(
-                color=ft.Colors.ON_PRIMARY,
-                bgcolor=ft.Colors.PRIMARY,
-                shape=ft.RoundedRectangleBorder(radius=8),
-                padding=10,
-            ),
-        )
-        self._export_markdown_button = ft.Button(
-            content="Export Markdown",
-            icon=ft.Icons.DESCRIPTION,
-            on_click=self._export_markdown,
-            style=ft.ButtonStyle(
-                color=ft.Colors.ON_PRIMARY,
-                bgcolor=ft.Colors.PRIMARY,
-                shape=ft.RoundedRectangleBorder(radius=8),
-                padding=10,
-            ),
-        )
+        self._export_json_button = ft.Button(content="Export JSON (.json)", icon=ft.Icons.FILE_DOWNLOAD, on_click=self._export_json)
+        self._export_markdown_button = ft.Button(content="Export Markdown (.md)", icon=ft.Icons.DESCRIPTION, on_click=self._export_markdown)
         self._export_progress = ft.ProgressBar(width=280, visible=False)
         self._export_status = ft.Text("", visible=False)
 
@@ -210,7 +189,7 @@ class CheckpointView:
         )
         self._stop_duration_selector.value = selected_stop_duration
         self._stop_seconds = self.STOP_DURATION_OPTIONS[selected_stop_duration]
-        self._update_stop_duration_display()
+        self._update_stop_duration_display()   # now safe – self._stop_duration_display exists
 
         await self._update_permission_status()
 
@@ -220,132 +199,45 @@ class CheckpointView:
         return ft.SafeArea(content=self._tabs, expand=True)
 
     def _record_panel(self) -> ft.Control:
-        # ----- Header (top banner, bold & centered, full width) -----
-        header = ft.Container(
-            content=ft.Text(
-                "Save a stop now, or allow the app to save a checkpoint after you've been still for a while.",
-                text_align=ft.TextAlign.CENTER,
-                weight=ft.FontWeight.BOLD,
-            ),
-            padding=10,
-            bgcolor=ft.Colors.SURFACE,
-            width=float("inf"),
-        )
-
-        header_divider = ft.Divider(height=1, thickness=1)
-
-        # ----- Footer (bottom banner, bold & centered, full width) -----
-        footer = ft.Container(
-            content=ft.Text(
-                "Location history stays on this device. Background tracking depends on the location permission you grant and your phone's battery settings.",
-                text_align=ft.TextAlign.CENTER,
-                weight=ft.FontWeight.BOLD,
-            ),
-            padding=10,
-            bgcolor=ft.Colors.SURFACE,
-            width=float("inf"),
-        )
-
-        footer_divider = ft.Divider(height=1, thickness=1)
-
-        # ----- Record button (themed) -----
-        record_button = ft.Button(
-            content="Record current stop",
-            icon=ft.Icons.LOCATION_ON,
-            on_click=self._record_manual,
-            width=200,
-            height=50,
-            style=ft.ButtonStyle(
-                color=ft.Colors.ON_PRIMARY,
-                bgcolor=ft.Colors.PRIMARY,
-                shape=ft.RoundedRectangleBorder(radius=10),
-                padding=12,
-            ),
-        )
-
-        middle = ft.Column(
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=20,
+        # Build the stop duration label with a timer icon
+        stop_duration_label = ft.Row(
             alignment=ft.MainAxisAlignment.CENTER,
             controls=[
-                self._tracking_switch,
-                self._status_row,
-                ft.Row(
-                    alignment=ft.MainAxisAlignment.CENTER,
-                    controls=[
-                        ft.Icon(ft.Icons.TIMER, size=20),
-                        self._stop_duration_display,
-                    ]
-                ),
-                self._note,
-                ft.Row(
-                    alignment=ft.MainAxisAlignment.CENTER,
-                    controls=[self._keep_note],
-                ),
-                record_button,
-            ],
+                ft.Icon(ft.Icons.TIMER, size=20),
+                self._stop_duration_display,   # reuse the Text we created in __init__
+            ]
         )
-
         return ft.Container(
             content=ft.Column(
-                expand=True,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=0,
+                spacing=20,
+                scroll=ft.ScrollMode.ALWAYS,
                 controls=[
-                    header,
-                    header_divider,
-                    ft.Container(
-                        content=middle,
-                        expand=True,
-                        padding=10,
+                    ft.Text(
+                        "Save a stop now, or allow the app to save a checkpoint\nafter you've been still for a while.",
+                        text_align=ft.TextAlign.CENTER,
                     ),
-                    footer_divider,
-                    footer,
+                    self._tracking_switch,
+                    self._status_row,
+                    stop_duration_label,
+                    self._note,
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        controls=[self._keep_note],
+                    ),
+                    ft.Button(content="Record current stop", icon=ft.Icons.LOCATION_ON, on_click=self._record_manual),
+                    ft.Text(
+                        "Location history stays on this device. Background tracking depends on\n"
+                        "the location permission you grant and your phone's battery settings.",
+                        text_align=ft.TextAlign.CENTER,
+                    ),
                 ],
             ),
+            padding=10,
             expand=True,
         )
 
     def _history_panel(self) -> ft.Control:
-        # ----- Themed filter buttons -----
-        pick_date_button = ft.Button(
-            content="Pick date(s)",
-            icon=ft.Icons.DATE_RANGE,
-            on_click=lambda _event: self._page.show_dialog(self._date_range_picker),
-            style=ft.ButtonStyle(
-                color=ft.Colors.ON_PRIMARY,
-                bgcolor=ft.Colors.PRIMARY,
-                shape=ft.RoundedRectangleBorder(radius=8),
-                padding=10,
-            ),
-        )
-
-        # Clear filters in red (ERROR color)
-        clear_filters_button = ft.Button(
-            content="Clear filters",
-            icon=ft.Icons.CLEAR,
-            on_click=self._clear_filters,
-            style=ft.ButtonStyle(
-                color=ft.Colors.ERROR,
-                bgcolor=None,  # transparent background
-                shape=ft.RoundedRectangleBorder(radius=8),
-                padding=10,
-            ),
-        )
-
-        # Reload icon button (primary)
-        refresh_button = ft.IconButton(
-            icon=ft.Icons.REFRESH,
-            on_click=self._refresh_history,
-            tooltip="Refresh history",
-            icon_color=ft.Colors.PRIMARY,
-            style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=8),
-                padding=8,
-                bgcolor=ft.Colors.SURFACE,
-            ),
-        )
-
         return ft.Container(
             content=ft.Column(
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -357,8 +249,8 @@ class CheckpointView:
                         alignment=ft.MainAxisAlignment.CENTER,
                         spacing=20,
                         controls=[
-                            self._export_markdown_button,
                             self._export_json_button,
+                            self._export_markdown_button,
                         ],
                     ),
                     ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._export_progress]),
@@ -370,10 +262,18 @@ class CheckpointView:
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         wrap=True,
                         controls=[
-                            refresh_button,
+                            ft.IconButton(
+                                icon=ft.Icons.REFRESH,
+                                on_click=self._refresh_history,
+                                tooltip="Refresh history",
+                            ),
                             self._search_field,
-                            pick_date_button,
-                            clear_filters_button,
+                            ft.Button(
+                                content="Pick date(s)",
+                                icon=ft.Icons.DATE_RANGE,
+                                on_click=lambda _event: self._page.show_dialog(self._date_range_picker),
+                            ),
+                            ft.TextButton(content="Clear filters", icon=ft.Icons.CLEAR, on_click=self._clear_filters),
                         ],
                     ),
                     ft.Row(
@@ -396,19 +296,6 @@ class CheckpointView:
         )
 
     def _settings_panel(self) -> ft.Control:
-        # ---- Clear history button (danger style) ----
-        clear_button = ft.Button(
-            content="Clear history",
-            icon=ft.Icons.DELETE_FOREVER,
-            on_click=self._confirm_clear_history,
-            style=ft.ButtonStyle(
-                color=ft.Colors.ON_ERROR,
-                bgcolor=ft.Colors.ERROR,
-                shape=ft.RoundedRectangleBorder(radius=8),
-                padding=10,
-            ),
-        )
-
         return ft.Container(
             content=ft.Column(
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -417,7 +304,7 @@ class CheckpointView:
                 controls=[
                     ft.Text("Appearance", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
                     ft.Text(
-                        "Choose light mode, dark mode, or follow your device setting.",
+                        "Choose light mode, dark mode,\nor follow your device setting.",
                         text_align=ft.TextAlign.CENTER,
                     ),
                     ft.Row(
@@ -427,7 +314,9 @@ class CheckpointView:
                     ft.Divider(),
                     ft.Text("Stop detection", weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
                     ft.Text(
-                        "How long you must stay still before a checkpoint saves automatically. Shorter catches quick stops but may trigger at traffic lights; longer only catches longer stops.",
+                        "How long you must stay still before a checkpoint saves automatically.\n"
+                        "Shorter catches quick stops but may trigger at traffic lights;\n"
+                        "longer only catches longer stops.",
                         text_align=ft.TextAlign.CENTER,
                     ),
                     ft.Row(
@@ -440,7 +329,11 @@ class CheckpointView:
                         "Permanently delete every checkpoint saved on this device.",
                         text_align=ft.TextAlign.CENTER,
                     ),
-                    clear_button,
+                    ft.Button(
+                        content="Clear history",
+                        icon=ft.Icons.DELETE_FOREVER,
+                        on_click=self._confirm_clear_history,
+                    ),
                 ],
             ),
             padding=10,
@@ -463,6 +356,7 @@ class CheckpointView:
         self._page.update()
 
     def _update_stop_duration_display(self) -> None:
+        # Now this is safe because self._stop_duration_display exists
         self._stop_duration_display.value = (
             f"Stop detection duration: {self._stop_seconds // 60} minutes (adjust in Settings)"
         )
@@ -499,7 +393,8 @@ class CheckpointView:
 
         if platform_name in ("WEB", "IOS", "BROWSER"):
             self._set_status(
-                "Automatic detection works best while the app is in focus. Background tracking is limited on this platform."
+                "Automatic detection works best while the app is in focus. "
+                "Background tracking is limited on this platform."
             )
             return
 
@@ -543,10 +438,12 @@ class CheckpointView:
         self._page.update()
 
     async def _record_manual(self, _event) -> None:
+        # Try to get a position, catch any error (timeout, no signal, etc.)
         try:
             position = await self._geolocator.get_current_position()
             await self._save_position(position, "Manual")
         except Exception as e:
+            # Show a user‑friendly message without crashing
             self._set_status(f"Could not get location: {e}. Please check your GPS/signal and try again.")
 
     async def _on_position_change(self, event: ftg.GeolocatorPositionChangeEvent) -> None:
@@ -663,24 +560,20 @@ class CheckpointView:
         self._page.update()
 
     def _history_item(self, checkpoint: Checkpoint) -> ft.Control:
+        # Assign icon based on source
         if checkpoint.source == "Manual":
-            icon = ft.Icons.TOUCH_APP
+            icon = ft.Icons.TOUCH_APP  # pointing finger
         elif checkpoint.source == "Automatic stop":
-            icon = ft.Icons.AUTO_MODE
+            icon = ft.Icons.AUTO_MODE  # automation icon
         else:
-            icon = ft.Icons.LOCATION_ON
+            icon = ft.Icons.LOCATION_ON  # fallback
 
         note = f" · {checkpoint.note}" if checkpoint.note else ""
         return ft.ListTile(
             leading=ft.Icon(icon),
             title=f"{checkpoint.source} · {checkpoint.coordinate_text}",
             subtitle=f"{checkpoint.created_at}{note}",
-            # OpenStreetMap button – now green
-            trailing=ft.IconButton(
-                icon=ft.Icons.OPEN_IN_NEW,
-                icon_color=ft.Colors.GREEN,
-                on_click=partial(self._open_map, checkpoint),
-            ),
+            trailing=ft.IconButton(icon=ft.Icons.OPEN_IN_NEW, on_click=partial(self._open_map, checkpoint)),
         )
 
     async def _open_map(self, checkpoint: Checkpoint) -> None:
