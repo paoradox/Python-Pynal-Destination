@@ -49,8 +49,6 @@ Python-Pynal-Destination/
 └── requirements.txt
 ```
 
-> **Note:** The `views/` folder currently contains duplicate copies of `main.py`, `models.py`, `pyproject.toml`, and `requirements.txt` (identical to the root versions), plus a further nested `views/views/` copy of the views package. These look like leftovers from a refactor — you may want to clean these up, since the app's actual imports (`from views.checkpoints import CheckpointView`) only need `views/checkpoints.py`.
-
 ---
 
 ## 🚀 Getting Started
