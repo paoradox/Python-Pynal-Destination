@@ -51,7 +51,7 @@ class CheckpointView:
         geolocator_kwargs = {
             "configuration": ftg.GeolocatorConfiguration(
                 accuracy=ftg.GeolocatorPositionAccuracy.HIGH,
-                distance_filter=25,
+                distance_filter=0,          # get updates even when still
             ),
             "on_position_change": self._on_position_change,
             "on_error": self._on_location_error,
@@ -219,6 +219,9 @@ class CheckpointView:
             ),
         )
 
+        # ---- Periodic checker for stop detection (runs every 5 seconds) ----
+        self._stop_check_task = None
+
     async def initialize(self) -> None:
         self._repository.initialize()
 
@@ -239,8 +242,40 @@ class CheckpointView:
 
         await self._refresh_history()
 
+        # Start the periodic checker
+        self._stop_check_task = asyncio.create_task(self._periodic_stop_check())
+
     def control(self) -> ft.Control:
         return ft.SafeArea(content=self._tabs, expand=True)
+
+    # ---------- Periodic stop detection checker ----------
+    async def _periodic_stop_check(self) -> None:
+        """Check every 5 seconds whether we've been still long enough."""
+        while True:
+            await asyncio.sleep(5)  # check every 5 seconds
+            if not self._tracker_enabled or self._last_position is None:
+                continue
+            # Use the last known position's speed
+            speed = self._last_position.speed or 0.0
+            now = datetime.now().astimezone()
+            if speed <= self.STOP_SPEED_METERS_PER_SECOND:
+                if self._still_since is None:
+                    self._still_since = now
+                    self._set_status("Stillness detected; waiting for\nthe stop duration to pass.")
+                else:
+                    elapsed = (now - self._still_since).total_seconds()
+                    if elapsed >= self._stop_seconds and self._can_record_auto(now):
+                        await self._save_position(self._last_position, "Automatic stop")
+                        self._last_auto_checkpoint_at = now
+                        self._still_since = None  # reset after recording
+                        # Updated status message – clearer
+                        self._set_status("Stop recorded. Stillness continues;\nwill record again after the duration.")
+            else:
+                # Movement detected – reset stillness timer
+                if self._still_since is not None:
+                    self._set_status("Movement detected;\nwatching for the next long pause.")
+                self._still_since = None
+    # ---------------------------------------------------
 
     def _record_panel(self) -> ft.Control:
         # ----- Header (top banner, bold & centered, full width) -----
@@ -501,7 +536,7 @@ class CheckpointView:
         # Choose icon based on message content
         if "paused" in message.lower():
             icon = ft.Icons.PAUSE_CIRCLE
-        elif "detecting" in message.lower():
+        elif "detecting" in message.lower() or "stillness" in message.lower():
             icon = ft.Icons.PLAY_CIRCLE
         elif "movement detected" in message.lower():
             icon = ft.Icons.DIRECTIONS_WALK
@@ -605,18 +640,14 @@ class CheckpointView:
 
     async def _on_position_change(self, event: ftg.GeolocatorPositionChangeEvent) -> None:
         self._last_position = event.position
-        if not self._tracker_enabled:
-            return
-        speed = event.position.speed or 0.0
-        now = datetime.now().astimezone()
-        if speed <= self.STOP_SPEED_METERS_PER_SECOND:
-            self._still_since = self._still_since or now
-            if (now - self._still_since).total_seconds() >= self._stop_seconds and self._can_record_auto(now):
-                await self._save_position(event.position, "Automatic stop")
-                self._last_auto_checkpoint_at = now
-        else:
-            self._still_since = None
-            self._set_status("Movement detected; watching for the next long pause.")
+        # The periodic checker now handles the stillness logic, so we only update the last position here.
+        # We keep the status update for immediate feedback.
+        if self._tracker_enabled:
+            speed = event.position.speed or 0.0
+            if speed <= self.STOP_SPEED_METERS_PER_SECOND:
+                self._set_status("Stillness detected; waiting for the stop duration to pass.")
+            else:
+                self._set_status("Movement detected; watching for the next long pause.")
 
     async def _save_position(self, position: ftg.GeolocatorPosition, source: str) -> None:
         if position.latitude is None or position.longitude is None:
@@ -647,8 +678,27 @@ class CheckpointView:
     async def _on_date_range_picked(self, _event) -> None:
         start = self._date_range_picker.start_value
         end = self._date_range_picker.end_value
-        self._filter_from = start.date() if isinstance(start, datetime) else start
-        self._filter_to = end.date() if isinstance(end, datetime) else end
+        # Get the local timezone
+        local_tz = datetime.now().astimezone().tzinfo
+
+        if isinstance(start, datetime):
+            if start.tzinfo is not None:
+                start = start.astimezone(local_tz)
+            else:
+                start = start.replace(tzinfo=local_tz)
+            self._filter_from = start.date()
+        else:
+            self._filter_from = start
+
+        if isinstance(end, datetime):
+            if end.tzinfo is not None:
+                end = end.astimezone(local_tz)
+            else:
+                end = end.replace(tzinfo=local_tz)
+            self._filter_to = end.date()
+        else:
+            self._filter_to = end
+
         self._page.pop_dialog()
         await self._refresh_history()
         self._page.update()
