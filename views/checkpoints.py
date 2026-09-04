@@ -173,6 +173,7 @@ class CheckpointView:
         )
         self._stop_duration_selector.value = selected_stop_duration
         self._stop_seconds = self.STOP_DURATION_OPTIONS[selected_stop_duration]
+        self._update_stop_duration_display()
 
         await self._refresh_history()
 
@@ -180,6 +181,9 @@ class CheckpointView:
         return ft.SafeArea(content=self._tabs, expand=True)
 
     def _record_panel(self) -> ft.Control:
+        self._stop_duration_display = ft.Text(
+            f"Stop detection duration: {self._stop_seconds // 60} minutes (adjust in Settings)"
+        )
         return ft.Column(
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             tight=True,
@@ -191,6 +195,7 @@ class CheckpointView:
                 ),
                 self._tracking_switch,
                 self._status,
+                self._stop_duration_display,
                 self._note,
                 ft.Button(content="Record current stop", icon=ft.Icons.LOCATION_ON, on_click=self._record_manual),
                 ft.Text(
@@ -296,7 +301,14 @@ class CheckpointView:
             selected, self.STOP_DURATION_OPTIONS[self.DEFAULT_STOP_DURATION]
         )
         self._repository.set_setting("stop_duration_minutes", selected)
+        self._update_stop_duration_display()
         self._page.update()
+
+    def _update_stop_duration_display(self) -> None:
+        if hasattr(self, "_stop_duration_display"):
+            self._stop_duration_display.value = (
+                f"Stop detection duration: {self._stop_seconds // 60} minutes (adjust in Settings)"
+            )
 
     async def _toggle_tracking(self, _event) -> None:
         if self._tracking_switch.value:
@@ -453,25 +465,25 @@ class CheckpointView:
     # --- Export --------------------------------------------------------------
 
     def _export_json(self, event) -> None:
-        if self._filters_active():
-            self._show_export_scope_dialog("json")
-        else:
-            self._page.run_task(self._run_export, "json", True, event)
+        self._show_export_scope_dialog("json")
 
     def _export_markdown(self, event) -> None:
-        if self._filters_active():
-            self._show_export_scope_dialog("md")
-        else:
-            self._page.run_task(self._run_export, "md", True, event)
+        self._show_export_scope_dialog("md")
 
     def _show_export_scope_dialog(self, kind: str) -> None:
         dialog = ft.AlertDialog(
             title=ft.Text("Export checkpoints"),
-            content=ft.Text("Export all checkpoints, or only what's currently shown by your filter/search?"),
+            content=ft.Text("Choose which checkpoints to export:"),
             actions=[
                 ft.TextButton(content="Cancel", on_click=lambda _event: self._page.pop_dialog()),
-                ft.TextButton(content="All checkpoints", on_click=partial(self._run_export, kind, True)),
-                ft.TextButton(content="Filtered / shown", on_click=partial(self._run_export, kind, False)),
+                ft.TextButton(
+                    content="All checkpoints",
+                    on_click=partial(self._run_export, kind, True),
+                ),
+                ft.TextButton(
+                    content="Filtered / shown",
+                    on_click=partial(self._run_export, kind, False),
+                ),
             ],
         )
         self._page.show_dialog(dialog)
@@ -492,7 +504,7 @@ class CheckpointView:
         self._page.pop_dialog()
         checkpoints = await asyncio.to_thread(self._repository.all) if export_all else self._displayed_checkpoints
         if not checkpoints:
-            self._status.value = "No checkpoints to export."
+            self._export_status.value = "No checkpoints to export."
             self._page.update()
             return
         await self._set_export_busy(True, f"Preparing {len(checkpoints)} checkpoint(s)…")
@@ -516,7 +528,7 @@ class CheckpointView:
             allowed_extensions=[extension],
             src_bytes=content.encode("utf-8"),
         )
-        self._status.value = "Export ready to save."
+        self._export_status.value = "Export ready to save."
         self._page.update()
 
     # --- Clear history ---------------------------------------------------
