@@ -1,5 +1,0 @@
-flet
-flet-geolocator
-flet-cli
-flet-desktop
-flet-web
