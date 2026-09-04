@@ -1,0 +1,25 @@
+[project]
+name = "Pynal Destination"
+version = "1.0.0"
+description = "Record and retrace stops from long drives and commutes with private on-device location history."
+requires-python = ">=3.12"
+authors = [
+    { name = "J.P Ancheta Javier", email = "qroize@gmail.com" }
+]
+dependencies = [
+    "flet",
+    "flet-geolocator"
+]
+
+[dependency-groups]
+dev = [
+    "flet-cli",
+    "flet-desktop",
+    "flet-web"
+]
+
+[tool.flet]
+product = "Pynal Destination"
+org = "dev.flet"
+company = "J.P Ancheta Javier"
+copyright = "Copyright (C) 2026 by J.P Ancheta Javier"
