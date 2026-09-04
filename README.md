@@ -1,5 +1,8 @@
 # Pynal Destination — Location History Recorder
 
+[![Built with](https://img.shields.io/badge/built_with-Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/platform-Android-02aaff?style=for-the-badge&logo=android)](https://www.android.com/)
+
 **Pynal Destination** is a cross-platform app that records and retraces stops from long drives and commutes with private, on-device location history. Built with [Flet](https://flet.dev/) and a local SQLite database.
 
 ---
