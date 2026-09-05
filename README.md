@@ -75,7 +75,7 @@ Python-Pynal-Destination/
 
 Run the app with:
 ```bash
-flet run main.py
+flet run --web main.py
 ```
 Or using the standard Python entry point:
 ```bash
