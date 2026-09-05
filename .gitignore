@@ -5,6 +5,11 @@ __pycache__/
 # Virtual environments
 .venv/
 venv/
+__pycache__/
+*.pyc
+*.db
+*.sqlite
+*.log
 env/
 
 # Environments / secrets
