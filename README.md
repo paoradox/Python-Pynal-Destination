@@ -82,7 +82,7 @@ Or using the standard Python entry point:
 python main.py
 ```
 
-On desktop/web, the database is stored as `travel_checkpoints.db` in the working directory; on Android/iOS, it's stored in the app's documents directory.
+On desktop/web, the database is stored as `travel_checkpoints.db` in the working directory; on Android, it's stored in the app's documents directory.
 
 ### Configuration
 
