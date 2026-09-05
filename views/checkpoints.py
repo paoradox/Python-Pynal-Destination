@@ -11,12 +11,6 @@ from models import Checkpoint, CheckpointRepository, build_zip_backup, map_link
 
 
 class CheckpointView:
-    # Research on GPS stop-detection (Zhao et al. 2015; Cich et al. 2016; Hwang et al.;
-    # Traccar's real-world default) converges on roughly 3-10 minutes of near-zero speed
-    # to distinguish a genuine stop from a traffic light or a walking pause, with the
-    # optimal value depending a lot on the individual's travel patterns. 5 minutes is a
-    # reasonable middle default; it's exposed as a Settings option since "optimal" varies
-    # per person/route.
     STOP_DURATION_OPTIONS = {
         "3": 3 * 60,
         "5": 5 * 60,
@@ -41,23 +35,19 @@ class CheckpointView:
         self._last_auto_checkpoint_at: datetime | None = None
         self._stop_seconds = self.STOP_DURATION_OPTIONS[self.DEFAULT_STOP_DURATION]
 
-        # History filter state
         self._filter_from: date | None = None
         self._filter_to: date | None = None
         self._filter_search: str = ""
         self._displayed_checkpoints: list[Checkpoint] = []
 
-        # ---- Geolocator with conditional Android foreground service ----
         geolocator_kwargs = {
             "configuration": ftg.GeolocatorConfiguration(
                 accuracy=ftg.GeolocatorPositionAccuracy.HIGH,
-                distance_filter=0,          # get updates even when still
+                distance_filter=0,
             ),
             "on_position_change": self._on_position_change,
             "on_error": self._on_location_error,
         }
-
-        # Only add android_configuration if the class exists (safe for web)
         if hasattr(ftg, "GeolocatorAndroidSettings"):
             geolocator_kwargs["android_configuration"] = ftg.GeolocatorAndroidSettings(
                 foreground_notification_title="Pynal Destination",
@@ -66,9 +56,7 @@ class CheckpointView:
                 foreground_notification_enable_wake_lock=True,
                 foreground_notification_enable_wifi_lock=True,
             )
-
         self._geolocator = ftg.Geolocator(**geolocator_kwargs)
-        # ----------------------------------------------------------------
 
         self._file_picker = ft.FilePicker()
         self._url_launcher = ft.UrlLauncher()
@@ -80,24 +68,17 @@ class CheckpointView:
 
         self._tracking_switch = ft.Switch(label="Automatic stop detection", on_change=self._toggle_tracking)
 
-        # ---- Status widget (icon + text) ----
         self._status_icon = ft.Icon(ft.Icons.INFO, size=20)
-        self._status_text = ft.Text(
-            "Automatic detection is paused.",
-            text_align=ft.TextAlign.CENTER,
-        )
+        self._status_text = ft.Text("Automatic detection is paused.", text_align=ft.TextAlign.CENTER)
         self._status_row = ft.Row(
             alignment=ft.MainAxisAlignment.CENTER,
             controls=[self._status_icon, self._status_text],
         )
-        # ------------------------------------
 
-        # ---- Stop duration display (updated later) ----
         self._stop_duration_display = ft.Text(
             f"Stop detection duration: {self._stop_seconds // 60} minutes\n(adjust in Settings)",
             text_align=ft.TextAlign.CENTER,
         )
-        # -------------------------------------------------
 
         self._note = ft.TextField(label="Optional note for the checkpoint")
         self._keep_note = ft.Checkbox(label="Keep note after saving", value=False)
@@ -117,7 +98,6 @@ class CheckpointView:
         self._history_loading_text = ft.Text("Loading checkpoints…", visible=False)
         self._history = ft.ListView(expand=True)
 
-        # ---- Export buttons (themed) ----
         self._export_json_button = ft.Button(
             content="Export JSON",
             icon=ft.Icons.FILE_DOWNLOAD,
@@ -150,9 +130,7 @@ class CheckpointView:
             content=ft.Column(
                 tight=True,
                 controls=[
-                    ft.Text(
-                        "This permanently deletes every checkpoint saved on this device. This cannot be undone."
-                    ),
+                    ft.Text("This permanently deletes every checkpoint saved on this device. This cannot be undone."),
                     self._clear_progress,
                     self._clear_status,
                 ],
@@ -219,12 +197,10 @@ class CheckpointView:
             ),
         )
 
-        # ---- Periodic checker for stop detection (runs every 5 seconds) ----
         self._stop_check_task = None
 
     async def initialize(self) -> None:
         self._repository.initialize()
-
         saved_mode = self._repository.get_setting("theme_mode", "system")
         selected_mode = saved_mode if saved_mode in self.THEME_MODES else "system"
         self._theme_selector.value = selected_mode
@@ -239,46 +215,56 @@ class CheckpointView:
         self._update_stop_duration_display()
 
         await self._update_permission_status()
-
         await self._refresh_history()
-
-        # Start the periodic checker
         self._stop_check_task = asyncio.create_task(self._periodic_stop_check())
 
     def control(self) -> ft.Control:
         return ft.SafeArea(content=self._tabs, expand=True)
 
-    # ---------- Periodic stop detection checker ----------
+    # ---------- Periodic checker ----------
     async def _periodic_stop_check(self) -> None:
-        """Check every 5 seconds whether we've been still long enough."""
         while True:
-            await asyncio.sleep(5)  # check every 5 seconds
-            if not self._tracker_enabled or self._last_position is None:
+            await asyncio.sleep(5)
+            if not self._tracker_enabled:
                 continue
-            # Use the last known position's speed
-            speed = self._last_position.speed or 0.0
+
             now = datetime.now().astimezone()
+            need_fresh = (
+                self._last_position is None
+                or (now - self._last_position.timestamp).total_seconds() > 10
+            )
+            if need_fresh:
+                try:
+                    position = await asyncio.wait_for(
+                        self._geolocator.get_current_position(),
+                        timeout=5.0
+                    )
+                    self._last_position = position
+                except Exception:
+                    pass
+
+            if self._last_position is None:
+                continue
+
+            speed = self._last_position.speed or 0.0
             if speed <= self.STOP_SPEED_METERS_PER_SECOND:
                 if self._still_since is None:
                     self._still_since = now
-                    self._set_status("Stillness detected; waiting for\nthe stop duration to pass.")
+                    self._set_status("Stillness detected; waiting for the stop duration to pass.")
                 else:
                     elapsed = (now - self._still_since).total_seconds()
                     if elapsed >= self._stop_seconds and self._can_record_auto(now):
                         await self._save_position(self._last_position, "Automatic stop")
                         self._last_auto_checkpoint_at = now
-                        self._still_since = None  # reset after recording
-                        # Updated status message – clearer
-                        self._set_status("Stop recorded. Stillness continues;\nwill record again after the duration.")
+                        self._still_since = None
+                        self._set_status("Stop recorded. Stillness continues; will record again after the duration.")
             else:
-                # Movement detected – reset stillness timer
                 if self._still_since is not None:
-                    self._set_status("Movement detected;\nwatching for the next long pause.")
+                    self._set_status("Movement detected; watching for the next long pause.")
                 self._still_since = None
-    # ---------------------------------------------------
+    # ----------------------------------------------------------------
 
     def _record_panel(self) -> ft.Control:
-        # ----- Header (top banner, bold & centered, full width) -----
         header = ft.Container(
             content=ft.Text(
                 "Save a stop now, or allow the app to save a checkpoint after you've"
@@ -290,10 +276,8 @@ class CheckpointView:
             bgcolor=ft.Colors.SURFACE,
             width=float("inf"),
         )
-
         header_divider = ft.Divider(height=1, thickness=1)
 
-        # ----- Footer (bottom banner, bold & centered, full width) -----
         footer = ft.Container(
             content=ft.Text(
                 "Location history stays on this device.\n"
@@ -306,10 +290,8 @@ class CheckpointView:
             bgcolor=ft.Colors.SURFACE,
             width=float("inf"),
         )
-
         footer_divider = ft.Divider(height=1, thickness=1)
 
-        # ----- Record button (themed) -----
         record_button = ft.Button(
             content="Record current stop",
             icon=ft.Icons.LOCATION_ON,
@@ -368,7 +350,6 @@ class CheckpointView:
         )
 
     def _history_panel(self) -> ft.Control:
-        # ----- Themed filter buttons -----
         pick_date_button = ft.Button(
             content="Pick date(s)",
             icon=ft.Icons.DATE_RANGE,
@@ -380,8 +361,6 @@ class CheckpointView:
                 padding=10,
             ),
         )
-
-        # Clear filters in red (ERROR color)
         clear_filters_button = ft.Button(
             content="Clear filters",
             icon=ft.Icons.CLEAR,
@@ -393,8 +372,6 @@ class CheckpointView:
                 padding=10,
             ),
         )
-
-        # Reload icon button (primary)
         refresh_button = ft.IconButton(
             icon=ft.Icons.REFRESH,
             on_click=self._refresh_history,
@@ -406,8 +383,6 @@ class CheckpointView:
                 bgcolor=ft.Colors.SURFACE,
             ),
         )
-
-        # Hint text – split into two lines
         hint_text = ft.Text(
             "Tap the ↗ icon on a checkpoint\n"
             "to open it in OpenStreetMap.",
@@ -456,7 +431,6 @@ class CheckpointView:
         )
 
     def _settings_panel(self) -> ft.Control:
-        # ---- Clear history button (danger style) ----
         clear_button = ft.Button(
             content="Clear history",
             icon=ft.Icons.DELETE_FOREVER,
@@ -529,14 +503,11 @@ class CheckpointView:
             f"Stop detection duration: {self._stop_seconds // 60} minutes\n(adjust in Settings)"
         )
 
-    # ---------- Helper to update status with an appropriate icon ----------
     def _set_status(self, message: str) -> None:
-        """Update the status text and choose a suitable icon based on the message."""
         self._status_text.value = message
-        # Choose icon based on message content
         if "paused" in message.lower():
             icon = ft.Icons.PAUSE_CIRCLE
-        elif "detecting" in message.lower() or "stillness" in message.lower():
+        elif "detecting" in message.lower() or "stillness" in message.lower() or "updated" in message.lower():
             icon = ft.Icons.PLAY_CIRCLE
         elif "movement detected" in message.lower():
             icon = ft.Icons.DIRECTIONS_WALK
@@ -553,34 +524,61 @@ class CheckpointView:
         self._status_icon.name = icon
         self._page.update()
 
-    # ----------------------------------------------------------------------
+    # ---- Battery settings helper (used by prompt) ----
+    async def _open_battery_settings(self, _event) -> None:
+        if self._page.platform.name != "ANDROID":
+            self._set_status("Battery optimisation settings are only available on Android.")
+            self._page.update()
+            return
+        await self._url_launcher.launch_url("android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS")
+
+    # ---- Battery prompt on toggle ----
+    async def _prompt_battery_optimization(self) -> None:
+        """Show a dialog asking the user to exempt from battery optimisation (Android only)."""
+        if self._page.platform.name != "ANDROID":
+            return
+        dialog = ft.AlertDialog(
+            title=ft.Text("Battery optimisation"),
+            content=ft.Text(
+                "For reliable background tracking, please exempt this app from battery optimisation.\n\n"
+                "Tap 'Open settings' to exempt, or 'Continue anyway' to start tracking (may be less reliable)."
+            ),
+            actions=[
+                ft.TextButton(content="Continue anyway", on_click=lambda e: self._page.pop_dialog()),
+                ft.TextButton(
+                    content="Open settings",
+                    on_click=lambda e: self._page.run_task(self._open_battery_settings_from_dialog, e),
+                ),
+            ],
+        )
+        self._page.show_dialog(dialog)
+
+    async def _open_battery_settings_from_dialog(self, _event) -> None:
+        self._page.pop_dialog()
+        await self._open_battery_settings(_event)
+
+    # ----------------------------------------------------------------
 
     async def _update_permission_status(self) -> None:
-        """Check current location permission and update UI with platform-specific messages."""
         platform_name = self._page.platform.name
-
         if platform_name in ("WEB", "IOS", "BROWSER"):
             self._set_status(
                 "Automatic detection works best while the app is in focus.\n"
                 "Background tracking is limited on this platform."
             )
             return
-
         try:
             status = await self._geolocator.get_permission_status()
         except (AttributeError, NotImplementedError):
             status = None
-
         if status in (ftg.GeolocatorPermissionStatus.ALWAYS, ftg.GeolocatorPermissionStatus.WHILE_IN_USE):
             if status == ftg.GeolocatorPermissionStatus.ALWAYS:
                 self._set_status(
-                    "Automatic detection is paused.\n"
-                    "Tap the switch to start (works in background)."
+                    "Automatic detection is paused.\nTap the switch to start (works in background)."
                 )
             else:
                 self._set_status(
-                    "Automatic detection is paused.\n"
-                    "Tap the switch to start (best when app is focused)."
+                    "Automatic detection is paused.\nTap the switch to start (best when app is focused)."
                 )
         else:
             self._set_status(
@@ -592,36 +590,30 @@ class CheckpointView:
     async def _toggle_tracking(self, _event) -> None:
         if self._tracking_switch.value:
             permission = await self._geolocator.request_permission()
-            if permission not in (
-                ftg.GeolocatorPermissionStatus.ALWAYS,
-                ftg.GeolocatorPermissionStatus.WHILE_IN_USE,
-            ):
+            if permission not in (ftg.GeolocatorPermissionStatus.ALWAYS, ftg.GeolocatorPermissionStatus.WHILE_IN_USE):
+                self._tracking_switch.value = False
                 self._tracker_enabled = False
                 self._set_status(
-                    "Location permission denied.\n"
-                    "Automatic detection is paused.\n"
-                    "Grant permission in system settings."
+                    "Location permission denied.\nAutomatic detection is paused.\nGrant permission in system settings."
                 )
+                self._page.update()
                 return
-
+            # Permission granted – enable tracking
             self._tracker_enabled = True
             if permission == ftg.GeolocatorPermissionStatus.ALWAYS:
                 self._set_status(
-                    "Detecting long pauses while location updates are available.\n"
-                    "(Background allowed)."
+                    "Detecting long pauses while location updates are available.\n(Background allowed)."
                 )
             else:
                 self._set_status(
-                    "Detecting long pauses while location updates are available.\n"
-                    "(Best when app is focused)."
+                    "Detecting long pauses while location updates are available.\n(Best when app is focused)."
                 )
-
             platform_name = self._page.platform.name
             if platform_name in ("WEB", "IOS", "BROWSER"):
-                self._set_status(
-                    self._status_text.value + "\n"
-                    "(Works only while the app is in focus.)"
-                )
+                self._set_status(self._status_text.value + "\n(Works only while the app is in focus.)")
+            # Prompt battery optimisation (Android only)
+            if platform_name == "ANDROID":
+                await self._prompt_battery_optimization()
         else:
             self._tracker_enabled = False
             self._still_since = None
@@ -633,15 +625,10 @@ class CheckpointView:
             position = await self._geolocator.get_current_position()
             await self._save_position(position, "Manual")
         except Exception as e:
-            self._set_status(
-                f"Could not get location: {e}.\n"
-                "Please check your GPS/signal and try again."
-            )
+            self._set_status(f"Could not get location: {e}.\nPlease check your GPS/signal and try again.")
 
     async def _on_position_change(self, event: ftg.GeolocatorPositionChangeEvent) -> None:
         self._last_position = event.position
-        # The periodic checker now handles the stillness logic, so we only update the last position here.
-        # We keep the status update for immediate feedback.
         if self._tracker_enabled:
             speed = event.position.speed or 0.0
             if speed <= self.STOP_SPEED_METERS_PER_SECOND:
@@ -668,19 +655,14 @@ class CheckpointView:
         return self._last_auto_checkpoint_at is None or (now - self._last_auto_checkpoint_at).total_seconds() >= self._stop_seconds
 
     def _on_location_error(self, _event) -> None:
-        self._set_status(
-            "Location updates are unavailable.\n"
-            "Check Location Services and permissions."
-        )
+        self._set_status("Location updates are unavailable.\nCheck Location Services and permissions.")
 
     # --- History filtering -------------------------------------------------
 
     async def _on_date_range_picked(self, _event) -> None:
         start = self._date_range_picker.start_value
         end = self._date_range_picker.end_value
-        # Get the local timezone
         local_tz = datetime.now().astimezone().tzinfo
-
         if isinstance(start, datetime):
             if start.tzinfo is not None:
                 start = start.astimezone(local_tz)
@@ -689,7 +671,6 @@ class CheckpointView:
             self._filter_from = start.date()
         else:
             self._filter_from = start
-
         if isinstance(end, datetime):
             if end.tzinfo is not None:
                 end = end.astimezone(local_tz)
@@ -698,7 +679,6 @@ class CheckpointView:
             self._filter_to = end.date()
         else:
             self._filter_to = end
-
         self._page.pop_dialog()
         await self._refresh_history()
         self._page.update()
@@ -755,7 +735,6 @@ class CheckpointView:
             self._page.update()
         else:
             delay_task.cancel()
-
         all_checkpoints = await fetch_task
         checkpoints = self._apply_filters(all_checkpoints)
         self._displayed_checkpoints = checkpoints
@@ -776,7 +755,6 @@ class CheckpointView:
             icon = ft.Icons.AUTO_MODE
         else:
             icon = ft.Icons.LOCATION_ON
-
         note = f" · {checkpoint.note}" if checkpoint.note else ""
         return ft.ListTile(
             leading=ft.Icon(icon),
