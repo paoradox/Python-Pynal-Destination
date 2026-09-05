@@ -632,9 +632,9 @@ class CheckpointView:
         if self._tracker_enabled:
             speed = event.position.speed or 0.0
             if speed <= self.STOP_SPEED_METERS_PER_SECOND:
-                self._set_status("Stillness detected; waiting for the stop duration to pass.")
+                self._set_status("Stillness detected;\nwaiting for the stop duration to pass.")
             else:
-                self._set_status("Movement detected; watching for the next long pause.")
+                self._set_status("Movement detected;\nwatching for the next long pause.")
 
     async def _save_position(self, position: ftg.GeolocatorPosition, source: str) -> None:
         if position.latitude is None or position.longitude is None:

@@ -1,6 +1,6 @@
 [project]
 name = "Pynal Destination"
-version = "3.0.0"
+version = "4.0.0"
 description = "Record and retrace stops from long drives and commutes with private on-device location history."
 requires-python = ">=3.12"
 authors = [
